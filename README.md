@@ -103,4 +103,4 @@ When a shutdown is scheduled, you should see desktop notifications.
 
 ## License
 
-Add a license file if you plan to publish this project.
+This script is provided under the MIT License. See LICENSE file for details.

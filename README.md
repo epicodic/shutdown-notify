@@ -41,7 +41,13 @@ sudo pacman -S libnotify
 
 ## Installation
 
-Download shutdown-notify.sh and run the install command:
+Download shutdown-notify.sh:
+
+```bash
+curl -L https://github.com/epicodic/shutdown-notify/raw/main/shutdown-notify.sh -o shutdown-notify.sh
+```
+
+Install and enable the user service:
 
 ```bash
 chmod +x shutdown-notify.sh

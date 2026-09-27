@@ -13,10 +13,12 @@ chmod +x "$installed_script"
 
 cat > "$test_dir/bin/systemctl" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
 exit 0
 EOF
 chmod +x "$test_dir/bin/systemctl"
 
-HOME="$test_home" PATH="$test_dir/bin:$PATH" "$installed_script" install
+HOME="$test_home" PATH="$test_dir/bin:$PATH" SYSTEMCTL_LOG="$test_dir/systemctl.log" "$installed_script" install
 [[ -x "$installed_script" ]]
 [[ -f "$test_home/.config/systemd/user/shutdown-notify.service" ]]
+grep -qx -- '--user restart shutdown-notify.service' "$test_dir/systemctl.log"

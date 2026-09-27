@@ -7,7 +7,7 @@ trap 'rm -rf "$test_dir"' EXIT
 
 # Load the functions without running the script's command dispatcher.
 # shellcheck disable=SC1090
-source <(sed '$d' "$script_dir/shutdown-notify.sh")
+source "$script_dir/shutdown-notify.sh"
 
 export TZ=UTC
 SCHEDULED_FILE="$test_dir/scheduled"
@@ -34,6 +34,9 @@ notify() {
         if (( polls == 1 )); then
             # Both times have two whole hours remaining.
             printf 'USEC=7800000000\nMODE=poweroff\n' > "$SCHEDULED_FILE"
+        elif (( polls == 2 )); then
+            # A changed shutdown mode also needs a fresh alert.
+            printf 'USEC=7800000000\nMODE=reboot\n' > "$SCHEDULED_FILE"
         else
             exit 0
         fi
@@ -42,6 +45,8 @@ notify() {
 )
 
 mapfile -t notifications < "$test_dir/notifications"
-[[ ${#notifications[@]} -eq 2 ]]
+[[ ${#notifications[@]} -eq 3 ]]
 [[ ${notifications[0]} == *'02:05:00'* ]]
 [[ ${notifications[1]} == *'02:10:00'* ]]
+[[ ${notifications[2]} == *'Reboot scheduled'* ]]
+[[ ${notifications[2]} == *'Reboot in'* ]]

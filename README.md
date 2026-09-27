@@ -4,16 +4,17 @@
 
 Desktop reminders for scheduled Linux shutdowns and reboots.
 
-`shutdown-notify` runs as a systemd user service and checks the shutdown scheduled by `systemd-logind` every 20 seconds.
-It sends an hourly reminder until the final five minutes, then sends a reminder each minute.
-New reminders update the previous notification when it is still open.
-If the shutdown is cancelled, the service closes its notification.
+`shutdown-notify` runs as a systemd user service and checks the schedule file written by `systemd-logind` every 20 seconds.
+It sends hourly reminders until five minutes remain, then sends a reminder each minute.
+Each new reminder replaces the previous notification if it is still open.
+When a scheduled shutdown is cancelled, the service closes its notification.
 
 ## Requirements
 
 - Linux with `systemd-logind` and a systemd user session
 - A graphical desktop with a notification service
-- Bash, GNU `date`, and `busctl` (provided by systemd)
+- Bash and GNU `date`
+- `busctl` (provided by systemd)
 - `notify-send` with `--print-id` and `--replace-id` support (provided by `libnotify-bin` on Debian and Ubuntu, or `libnotify` on Fedora and Arch Linux)
 
 Install `notify-send` if needed:
@@ -39,8 +40,9 @@ chmod +x shutdown-notify.sh
 ./shutdown-notify.sh install
 ```
 
-The installer copies the script to `~/.local/bin/`, writes a user service to `~/.config/systemd/user/`, and enables and starts it.
-Run `./shutdown-notify.sh install` again after updating the script; the installer restarts an existing service so it uses the new version.
+The installer copies the script to `~/.local/bin/`, writes a user service to `~/.config/systemd/user/`, and enables and starts the service.
+To update an existing installation, download the latest script and run `./shutdown-notify.sh install` again.
+The installer restarts the service so it uses the new version.
 
 ## Use
 
@@ -54,10 +56,10 @@ sudo shutdown -c       # Cancel a scheduled shutdown
 
 Hourly reminders use normal urgency.
 Reminders during the final five minutes use critical urgency.
-The scheduled date appears when shutdown is at least 24 hours away.
+The scheduled date appears when a shutdown is at least 24 hours away.
 Some desktop notification services ignore expiration times, particularly for critical alerts.
 
-Check the service or remove it with:
+Check the service status or uninstall it with:
 
 ```bash
 ./shutdown-notify.sh status
@@ -75,7 +77,7 @@ notify-send 'Notification test'
 ```
 
 Make sure you are in a graphical session and that `notify-send` is installed.
-The service checks every 20 seconds, so a reminder or cancellation may take up to 20 seconds to appear.
+The service checks every 20 seconds, so a reminder may appear up to 20 seconds late, and cancellation may take up to 20 seconds to clear an alert.
 
 ## Development
 

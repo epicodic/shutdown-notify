@@ -13,6 +13,9 @@ INSTALLED_SERVICE_PATH="$SYSTEMD_USER_DIR/$SERVICE_NAME"
 
 last_notif_hour=-1
 last_notif_min=-1
+last_schedule_usec=""
+last_schedule_mode=""
+notification_id=""
 
 usage() {
     cat <<EOF
@@ -29,7 +32,11 @@ EOF
 
 notify() {
     local title="$1" body="$2"
-    notify-send -u "critical" -t 15000 "$title" "$body"
+    local -a options=(-u critical -t 15000 --print-id)
+    if [[ -n "$notification_id" ]]; then
+        options+=(--replace-id="$notification_id")
+    fi
+    notification_id=$(notify-send "${options[@]}" "$title" "$body")
 }
 
 # Reads the scheduled shutdown info from $SCHEDULED_FILE and updates global variables:
@@ -74,7 +81,9 @@ EOF
 
 install() {
     mkdir -p "$BIN_DIR"
-    cp "$0" "$INSTALLED_SCRIPT_PATH"
+    if [[ ! "$0" -ef "$INSTALLED_SCRIPT_PATH" ]]; then
+        cp "$0" "$INSTALLED_SCRIPT_PATH"
+    fi
     chmod +x "$INSTALLED_SCRIPT_PATH"
 
     write_service_file
@@ -105,6 +114,13 @@ run() {
             read_scheduled_values
 
             if [[ -n "$parsed_usec" ]]; then
+                if [[ "$parsed_usec" != "$last_schedule_usec" || "$parsed_mode" != "$last_schedule_mode" ]]; then
+                    last_notif_hour=-1
+                    last_notif_min=-1
+                    last_schedule_usec="$parsed_usec"
+                    last_schedule_mode="$parsed_mode"
+                fi
+
                 now_usec=$(date +%s%6N)
                 remaining_usec=$(( parsed_usec - now_usec ))
 
@@ -146,6 +162,8 @@ run() {
             # Shutdown cancelled or not scheduled -> reset state
             last_notif_hour=-1
             last_notif_min=-1
+            last_schedule_usec=""
+            last_schedule_mode=""
         fi
 
         sleep 20

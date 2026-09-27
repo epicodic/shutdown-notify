@@ -31,19 +31,27 @@ EOF
 }
 
 notify() {
-    local title="$1" body="$2"
-    local -a options=(-u critical -t 15000 --print-id)
+    local title="$1" body="$2" urgency="${3:-critical}"
+    local -a options=(-u "$urgency" -t 15000 --print-id)
     if [[ -n "$notification_id" ]]; then
         options+=(--replace-id="$notification_id")
     fi
     notification_id=$(notify-send "${options[@]}" "$title" "$body")
 }
 
+close_notification() {
+    if [[ -n "$notification_id" ]]; then
+        busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications \
+            org.freedesktop.Notifications CloseNotification u "$notification_id" >/dev/null 2>&1 || true
+        notification_id=""
+    fi
+}
+
 # Reads the scheduled shutdown info from $SCHEDULED_FILE and updates global variables:
 read_scheduled_values() {
     local line key value
     parsed_usec=""
-    parsed_mode="shutdown"
+    parsed_mode=""
 
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
@@ -89,7 +97,8 @@ install() {
     write_service_file
 
     systemctl --user daemon-reload
-    systemctl --user enable --now "$SERVICE_NAME"
+    systemctl --user enable "$SERVICE_NAME"
+    systemctl --user restart "$SERVICE_NAME"
 
     echo "Installed and started $SERVICE_NAME"
 }
@@ -110,10 +119,16 @@ status() {
 
 run() {
     while true; do
-        if [[ -f "$SCHEDULED_FILE" ]]; then
-            read_scheduled_values
+        if [[ -f "$SCHEDULED_FILE" ]] && read_scheduled_values 2>/dev/null; then
 
-            if [[ -n "$parsed_usec" ]]; then
+            # Ignore incomplete or malformed file contents while logind updates them.
+            case "$parsed_mode" in
+                reboot|kexec|soft-reboot) action="Reboot" ;;
+                poweroff|halt|exit) action="Shutdown" ;;
+                *) action="" ;;
+            esac
+            if [[ "$parsed_usec" =~ ^[1-9][0-9]{0,17}$ && -n "$action" ]]; then
+
                 if [[ "$parsed_usec" != "$last_schedule_usec" || "$parsed_mode" != "$last_schedule_mode" ]]; then
                     last_notif_hour=-1
                     last_notif_min=-1
@@ -126,7 +141,11 @@ run() {
 
                 if (( remaining_usec > 0 )); then
                     remaining_sec=$(( remaining_usec / 1000000 ))
-                    shutdown_at=$(date -d "@$(( parsed_usec / 1000000 ))" '+%H:%M:%S')
+                    if (( remaining_sec >= 86400 )); then
+                        shutdown_at=$(date -d "@$(( parsed_usec / 1000000 ))" '+%Y-%m-%d %H:%M:%S')
+                    else
+                        shutdown_at=$(date -d "@$(( parsed_usec / 1000000 ))" '+%H:%M:%S')
+                    fi
 
                     if (( remaining_sec <= 300 )); then
                         # Last 5 minutes -> notify each minute
@@ -138,8 +157,8 @@ run() {
                                 disp="${remaining_sec}s"
                             fi
                             notify \
-                                "⚠️  Shutdown in ${disp}!" \
-                                "System ${parsed_mode} scheduled at ${shutdown_at}"
+                                "⚠️  ${action} in ${disp}!" \
+                                "Scheduled for ${shutdown_at}"
                             last_notif_min=$current_min
                             last_notif_hour=-1
                         fi
@@ -150,8 +169,9 @@ run() {
                             h=$(( remaining_sec / 3600 ))
                             m=$(( (remaining_sec % 3600) / 60 ))
                             notify \
-                                "🕐  Shutdown scheduled" \
-                                "System ${parsed_mode} in ~${h}h ${m}m  (at ${shutdown_at})"
+                                "🕐  ${action} scheduled" \
+                                "${action} in ~${h}h ${m}m (at ${shutdown_at})" \
+                                normal
                             last_notif_hour=$current_hour
                             last_notif_min=-1
                         fi
@@ -160,6 +180,7 @@ run() {
             fi
         else
             # Shutdown cancelled or not scheduled -> reset state
+            close_notification
             last_notif_hour=-1
             last_notif_min=-1
             last_schedule_usec=""
@@ -199,4 +220,6 @@ main() {
     esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

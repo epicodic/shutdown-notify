@@ -1,106 +1,94 @@
 # shutdown-notify
 
-Desktop notifications for scheduled system shutdown/reboot on Linux systems using systemd.
+[![CI](https://github.com/epicodic/shutdown-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/epicodic/shutdown-notify/actions/workflows/ci.yml)
 
-This project runs a small background script in your user session. It watches
-`/run/systemd/shutdown/scheduled` and sends desktop notifications with
-`notify-send`:
+Desktop reminders for scheduled Linux shutdowns and reboots.
 
-- hourly while shutdown is more than 5 minutes away
-- every minute during the final 5 minutes
-
-## Files
-
-- `shutdown-notify.sh` - main script with subcommands: `install`, `uninstall`, `status`, `run`, `help`
+`shutdown-notify` runs as a systemd user service and checks the shutdown scheduled by `systemd-logind` every 20 seconds.
+It sends an hourly reminder until the final five minutes, then sends a reminder each minute.
+New reminders update the previous notification when it is still open.
+If the shutdown is cancelled, the service closes its notification.
 
 ## Requirements
 
-- Linux with `systemd --user` support
-- A graphical desktop session (notifications are sent to your user session)
-- `notify-send` (usually provided by `libnotify` / `libnotify-bin`)
+- Linux with `systemd-logind` and a systemd user session
+- A graphical desktop with a notification service
+- Bash, GNU `date`, and `busctl` (provided by systemd)
+- `notify-send` with `--print-id` and `--replace-id` support (provided by `libnotify-bin` on Debian and Ubuntu, or `libnotify` on Fedora and Arch Linux)
 
-### Install notify-send (if needed)
-
-Debian/Ubuntu:
+Install `notify-send` if needed:
 
 ```bash
+# Debian or Ubuntu
 sudo apt install libnotify-bin
-```
 
-Fedora:
-
-```bash
+# Fedora
 sudo dnf install libnotify
-```
 
-Arch Linux:
-
-```bash
+# Arch Linux
 sudo pacman -S libnotify
 ```
 
-## Installation
+## Install
 
-Download shutdown-notify.sh:
-
-```bash
-curl -L https://github.com/epicodic/shutdown-notify/raw/main/shutdown-notify.sh -o shutdown-notify.sh
-```
-
-Install and enable the user service:
+Download the script, then install the user service without `sudo`:
 
 ```bash
+curl -fsSLO https://raw.githubusercontent.com/epicodic/shutdown-notify/main/shutdown-notify.sh
 chmod +x shutdown-notify.sh
 ./shutdown-notify.sh install
 ```
 
-The installer will:
+The installer copies the script to `~/.local/bin/`, writes a user service to `~/.config/systemd/user/`, and enables and starts it.
+Run `./shutdown-notify.sh install` again after updating the script; the installer restarts an existing service so it uses the new version.
 
-1. Copy `shutdown-notify.sh` to `$HOME/.local/bin/`
-2. Make it executable
-3. Write `shutdown-notify.service` to `$HOME/.config/systemd/user/`
-4. Enable and start the user service (`systemctl --user enable --now`)
+## Use
 
-## Usage
-
-After installation, schedule a shutdown or reboot as usual.
-
-Examples:
+Schedule a shutdown or reboot as usual:
 
 ```bash
-# Shutdown in 2 hours
-sudo shutdown -h +120
-
-# Reboot in 15 minutes
-sudo shutdown -r +15
+sudo shutdown -h +120  # Shut down in two hours
+sudo shutdown -r +15   # Reboot in 15 minutes
+sudo shutdown -c       # Cancel a scheduled shutdown
 ```
 
-When a shutdown is scheduled, you should see desktop notifications.
+Hourly reminders use normal urgency.
+Reminders during the final five minutes use critical urgency.
+The scheduled date appears when shutdown is at least 24 hours away.
+Some desktop notification services ignore expiration times, particularly for critical alerts.
 
-## Check service status
+Check the service or remove it with:
 
 ```bash
 ./shutdown-notify.sh status
-```
-
-## Uninstall
-
-```bash
 ./shutdown-notify.sh uninstall
 ```
 
-
 ## Troubleshooting
 
-- No notifications appear:
-  - Ensure you are in a graphical session.
-  - Verify `notify-send` is installed.
-  - Check service status `./shutdown-notify.sh status`.
-- Service not running after reboot/login:
-  - Check whether user services are enabled and running in your session.
-- Notifications stop after cancelling shutdown:
-  - This is expected; the script resets when no shutdown is scheduled.
+If reminders do not appear, check the user service and its logs:
+
+```bash
+systemctl --user status shutdown-notify.service
+journalctl --user -u shutdown-notify.service -n 50 --no-pager
+notify-send 'Notification test'
+```
+
+Make sure you are in a graphical session and that `notify-send` is installed.
+The service checks every 20 seconds, so a reminder or cancellation may take up to 20 seconds to appear.
+
+## Development
+
+Run the same checks as [CI](.github/workflows/ci.yml):
+
+```bash
+for file in shutdown-notify.sh tests/*.sh; do bash -n "$file"; done
+shellcheck shutdown-notify.sh tests/*.sh
+bash tests/run.sh
+```
+
+The tests use temporary directories and stub system commands; they do not schedule a real shutdown.
 
 ## License
 
-This script is provided under the MIT License. See LICENSE file for details.
+[MIT](LICENSE) © 2026 epicodic.

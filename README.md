@@ -4,6 +4,8 @@
 
 Desktop reminders for scheduled Linux shutdowns and reboots.
 
+![A desktop notification showing a scheduled shutdown countdown](assets/shutdown-notification.png)
+
 `shutdown-notify` runs as a systemd user service and checks the schedule file written by `systemd-logind` every 20 seconds.
 It sends hourly reminders until five minutes remain, then sends a reminder each minute.
 Each new reminder replaces the previous notification if it is still open.
